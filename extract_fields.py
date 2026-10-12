@@ -147,30 +147,45 @@ def _study_form(t):
     return {"очно-заочн": "очно-заочная", "заочн": "заочная", "очн": "очная"}[m.group(1).lower()]
 
 
-def _extract_study(t, has_esign):
+def _study_direction(t):
+    """Направление подготовки / специальность: «31.05.01 Лечебное дело» и т.п."""
+    code = r"\d{2}\.\d{2}\.\d{2}"
     stop = (r"(?=\s+в\s+(?i:федеральн|государственн|муниципальн|негосударственн|"
-            r"образовательн|частн)|\s*[«\"]|\.\s+[А-ЯЁ]|\n|$)")
+            r"образовательн|частн|ФГБОУ|ФГАОУ|ФГБУ|ГБОУ)|\s*[»\"”«]|\.\s+[А-ЯЁ]|$)")
+    op = r"\s*[:\-]?\s*[«\"“„]?\s*"
+    return _first([
+        # ... образовательной программой "31.05.01 Лечебное дело" ...
+        r"(?i:образовательн\w+\s+программ\w*)" + op +
+        r"(%s\s*[-–—]?\s*[\s\S]{1,200}?)" % code + stop,
+        # ... по направлению подготовки / специальности 01.03.02 - ...
+        r"(?i:направлени[юе]\s+подготовки|специальност[ьи])" + op +
+        r"(%s\s*[-–—]?\s*[\s\S]{1,200}?)" % code + stop,
+        r"(?i:направлени[юе]\s+подготовки|специальност[ьи])" + op +
+        r"([\s\S]{1,200}?)" + stop,
+        # запасной вариант: код специальности + название где угодно в тексте
+        r"(?<![\d.])(%s(?![\d.])\s*[-–—]?\s*[А-ЯЁ][\s\S]{1,200}?)" % code + stop,
+    ], t)
+
+
+def _extract_study(t, has_esign, marks):
     return {
         "ФИО студента": _fio(t, [
             r"(?i:выдана|выдан|дана|подтверждает(?:ся)?,? что)\s*[:,]?\s*(%s)" % FIO,
             r"(?i:студент(?:ка)?)\s*[:,]?\s*(%s)" % FIO,
             r"(%s)" % FIO]),
         "Название вуза": _first([
-            r"[«\"]([^»\"]*(?i:университет|институт|академи)[^»\"]*)[»\"]",
+            r"[«\"“]([^»\"”«“]*(?i:университет|институт|академи)[^»\"”«“]*)[»\"”]",
             r"([^\n]{0,120}?(?i:университет|институт|академи)[^\n]{0,80})"], t),
-        "Направление подготовки": _first([
-            r"(?i:направлени[юе]\s+подготовки|специальност[ьи])\s*[:\-]?\s*"
-            r"(\d{2}\.\d{2}\.\d{2}\s*[-–—]?\s*.+?)" + stop,
-            r"(?i:направлени[юе]\s+подготовки|специальност[ьи])\s*[:\-]?\s*(.+?)" + stop], t),
+        "Направление подготовки": _study_direction(t),
         "Форма обучения": _study_form(t),
         "Период обучения": _study_period(t),
         "Номер и дата выдачи": _number_date(t),
         # документ заверен, если есть ЭП либо бумажные подпись и печать
-        "Подпись и печать": _yes_no(has_esign or (_has_signature(t) and _has_stamp(t))),
+        "Подпись и печать": _yes_no(has_esign or marks["signature"] or marks["stamp"]),
     }
 
 
-def _extract_leave(t, has_esign):
+def _extract_leave(t, has_esign, marks):
     m = re.search(r"(?i:отпуск)[\s\S]{0,150}?\bс\s+(%s)\s*(?i:по|до)\s+(%s)"
                   % (DATE, DATE), t)
     if m:
@@ -210,11 +225,11 @@ def _extract_leave(t, has_esign):
         "Дата окончания": end or NOT_FOUND,
         "Дата заявления": app_date,
         # заявление подписано, если есть рукописная подпись либо ЭП
-        "Подпись студента": _yes_no(has_esign or _has_signature(t)),
+        "Подпись студента": _yes_no(has_esign or marks["signature"]),
     }
 
 
-def _extract_practice(t, has_esign):
+def _extract_practice(t, has_esign, marks):
     start, end = _period(t)
     return {
         "ФИО студента": _fio(t, [
@@ -231,12 +246,17 @@ def _extract_practice(t, has_esign):
             r"(?i:оценк\w*|аттестован\w* на)\s*[:\-]?\s*[«\"]?"
             r"(отлично|хорошо|удовлетворительно|неудовлетворительно|зачтено|\d)"], t),
         "Номер и дата выдачи": _number_date(t),
-        "Подпись и печать": _yes_no(has_esign or (_has_signature(t) and _has_stamp(t))),
+        "Подпись и печать": _yes_no(has_esign or (marks["signature"] and marks["stamp"])),
     }
 
 
-def extract_fields(ocr_text, doc_type=None):
-    """doc_type: 'study' | 'leave' | 'practice' | None (определится автоматически)."""
+def extract_fields(ocr_text, doc_type=None, marks=None):
+    """
+    doc_type: 'study' | 'leave' | 'practice' | None (определится автоматически).
+    marks: {"stamp": bool, "signature": bool} - результат анализа изображения
+           (marks_detector.detect_marks). Если не передан, подпись и печать
+           определяются по тексту OCR, а это менее надёжно.
+    """
     text = re.sub(r"[ \t\u00a0]+", " ", ocr_text or "")
     doc_type = doc_type or detect_doc_type(text)
     handlers = {
@@ -251,7 +271,12 @@ def extract_fields(ocr_text, doc_type=None):
     # блок ЭП убираем из текста полей: в нём ФИО владельца сертификата и даты его
     # действия, которые нельзя путать с данными самого документа
     has_esign = _has_esign(text)
-    result.update(fn(_strip_esign(text), has_esign))
+    clean = _strip_esign(text)
+    if marks is None:
+        marks = {"signature": _has_signature(clean), "stamp": _has_stamp(clean)}
+    else:
+        marks = {"signature": bool(marks.get("signature")), "stamp": bool(marks.get("stamp"))}
+    result.update(fn(clean, has_esign, marks))
     return result
 
 

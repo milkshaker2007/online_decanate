@@ -7,25 +7,25 @@ import numpy as np
 from PIL import Image
 from paddleocr import PaddleOCR
 
-from extract_fields import extract_fields  # файл с функцией извлечения полей
+from extract_fields import extract_fields  
+from marks_detector import detect_marks   
 
 # Порог для объединения фрагментов в одну строку: доля от медианной высоты текста.
 # Если строки рвутся — увеличьте (0.7), если соседние строки склеиваются — уменьшите (0.3).
 LINE_MERGE_RATIO = 0.5
 
-# Минимальная длина текстового слоя PDF, при которой OCR всей страницы не нужен.
+
 MIN_PDF_TEXT_LENGTH = 30
 
 # Встроенные в PDF картинки (штамп ЭП, печать, подпись) распознаются отдельно,
 # потому что в текстовый слой они не попадают.
 OCR_PDF_IMAGES = True
-MIN_IMAGE_WIDTH = 40      # пункты PDF; всё мельче считаем мусором
+MIN_IMAGE_WIDTH = 40      
 MIN_IMAGE_HEIGHT = 20
-MAX_IMAGE_PAGE_SHARE = 0.6  # картинки больше 60% страницы — это скан, а не штамп
+MAX_IMAGE_PAGE_SHARE = 0.6  
 MAX_IMAGES_PER_PAGE = 10
 
-# Если в PDF есть настоящая цифровая подпись (поле подписи), добавляем эту строку в текст,
-# чтобы extract_fields засчитал ЭП, даже когда штамп на странице не виден.
+
 PDF_SIGNATURE_MARKER = "ДОКУМЕНТ ПОДПИСАН ЭЛЕКТРОННОЙ ПОДПИСЬЮ"
 
 
@@ -189,11 +189,8 @@ def extract_text(file_path):
 
 
 def process_document(file_path, doc_type=None):
-    """
-    Файл (JPG/PNG/PDF) -> словарь с полями документа, готовый для RAG-модуля.
-    doc_type: 'study' | 'leave' | 'practice' | None (определится автоматически).
-    """
     text = extract_text(file_path)
-    return extract_fields(text, doc_type=doc_type)
+    marks = detect_marks(file_path)
+    return extract_fields(text, doc_type=doc_type, marks=marks)
 
 
