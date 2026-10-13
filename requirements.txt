@@ -1,0 +1,6 @@
+paddlepaddle
+paddleocr>=3.0
+pymupdf
+pillow
+numpy
+opencv-python-headless
