@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Онлайн-деканат ВУЗа</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        navy: {
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        },
+                        brand: {
+                            50: '#fdf2f8',
+                            100: '#fce7f3',
+                            200: '#fbcfe8',
+                            400: '#f472b6',
+                            500: '#ec4899',
+                            600: '#db2777',
+                            700: '#be185d',
+                            800: '#9d174d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-chat-msg {
+            animation: fadeIn 0.25s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="font-sans antialiased h-full flex flex-col text-slate-800 bg-slate-100">
+
+    <!-- Header -->
+    <header class="bg-navy-900 text-white shrink-0 shadow-md border-b border-slate-800">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo & Title -->
+                <div class="flex items-center space-x-3 cursor-pointer" onclick="resetChat()">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-pink-400 flex items-center justify-center text-white shadow-md shadow-pink-500/20">
+                        <i class="fa-solid fa-graduation-cap text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h1 class="font-bold text-lg leading-tight tracking-wide">Онлайн-Деканат</h1>
+                            <span class="bg-brand-500/20 text-brand-300 text-[10px] px-2 py-0.5 rounded-full border border-brand-400/30 font-medium">ИИ 24/7</span>
+                        </div>
+                        <p class="text-xs text-slate-400">Государственный Университет</p>
+                    </div>
+                </div>
+
+                <!-- Info Actions -->
+                <div class="flex items-center space-x-3">
+                    <button onclick="toggleModal('infoModal')" class="flex items-center space-x-2 text-slate-300 hover:text-white transition-colors bg-slate-800/80 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700 text-xs sm:text-sm">
+                        <i class="fa-solid fa-circle-info text-brand-400"></i>
+                        <span class="hidden sm:inline">О ВУЗе и деканате</span>
+                        <span class="sm:hidden">Инфо</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Messenger Container -->
+    <main class="flex-1 max-w-5xl w-full mx-auto p-2 sm:p-4 md:p-6 flex flex-col min-h-0">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col h-full overflow-hidden">
+            
+            <!-- Messenger Header -->
+            <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+                <div class="flex items-center space-x-3">
+                    <div class="relative">
+                        <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-brand-600 to-pink-500 flex items-center justify-center text-white shadow-sm">
+                            <i class="fa-solid fa-robot text-base"></i>
+                        </div>
+                        <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full" title="Онлайн"></span>
+                    </div>
+                    <div>
+                        <h2 class="font-semibold text-sm text-slate-900 flex items-center gap-2">
+                            ИИ-Помощник Деканата
+                        </h2>
+                        <p class="text-xs text-slate-500 flex items-center gap-1">
+                            <span>Автоматическое распознавание документов и консультации</span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Active Document Badge Indicator -->
+                <div id="active-doc-indicator" class="hidden sm:flex items-center space-x-2 bg-brand-50 border border-brand-200 text-brand-800 px-3 py-1 rounded-full text-xs font-medium">
+                    <i class="fa-solid fa-file-check text-brand-600"></i>
+                    <span id="active-doc-name-badge">Документ прикреплен</span>
+                </div>
+            </div>
+
+            <!-- Chat Scroll Area -->
+            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar bg-slate-50/40">
+                
+                <!-- Initial Welcome Message from AI -->
+                <div class="flex items-start space-x-3 max-w-2xl animate-chat-msg">
+                    <div class="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center shrink-0 text-xs shadow-sm">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm text-sm text-slate-800 space-y-2">
+                        <p>Здравствуйте! Я виртуальный помощник онлайн-деканата.</p>
+                        <p>Вы можете задать вопрос или прикрепить документ через <strong>значок скрепки <i class="fa-solid fa-paperclip text-brand-600"></i></strong> внизу.</p>
+                        <div class="text-xs bg-brand-50/60 p-2.5 rounded-lg border border-brand-100 text-slate-700">
+                            <strong><i class="fa-solid fa-wand-magic-sparkles text-brand-600 mr-1"></i> Автоматическое определение документов и реквизитов:</strong>
+                            <ul class="list-disc list-inside mt-1 space-y-0.5 text-slate-600">
+                                <li><strong>Справка об обучении:</strong> ФИО, ВУЗ, Направление, Форма, Период, № и дата выдачи, Печать и подпись</li>
+                                <li><strong>Заявление на акад. отпуск:</strong> ФИО, Группа и курс, Причина, Даты отпуска, Дата заявления, Подпись</li>
+                                <li><strong>Справка о практике:</strong> ФИО, Организация, Сроки, Руководитель, Оценка, № и дата выдачи, Печать и подпись</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Quick Suggestions Bar -->
+            <div class="p-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center space-x-2 overflow-x-auto custom-scrollbar text-xs shrink-0">
+                <span class="text-slate-400 whitespace-nowrap pl-1 font-medium">Частые вопросы:</span>
+                <button onclick="sendQuickQuestion('Как получить справку об обучении с ЭЦП?')" class="bg-white hover:bg-brand-50 hover:text-brand-700 text-slate-700 px-3 py-1.5 rounded-full whitespace-nowrap transition-colors border border-slate-200 shadow-sm">
+                    🎓 Как получить справку с ЭЦП?
+                </button>
+                <button onclick="sendQuickQuestion('Правила оформления академического отпуска')" class="bg-white hover:bg-brand-50 hover:text-brand-700 text-slate-700 px-3 py-1.5 rounded-full whitespace-nowrap transition-colors border border-slate-200 shadow-sm">
+                    📜 Как уйти в акад. отпуск?
+                </button>
+                <button onclick="sendQuickQuestion('Сроки сдачи справок по практике')" class="bg-white hover:bg-brand-50 hover:text-brand-700 text-slate-700 px-3 py-1.5 rounded-full whitespace-nowrap transition-colors border border-slate-200 shadow-sm">
+                    💼 Сроки сдачи практики
+                </button>
+            </div>
+
+            <!-- Input Area with Attach Popover -->
+            <div class="relative p-3 bg-white border-t border-slate-200 shrink-0">
+                
+                <!-- File Attachment Popover -->
+                <div id="attach-popover" class="hidden absolute bottom-16 left-3 z-30 bg-white rounded-2xl shadow-xl border border-slate-200 p-3 w-80 sm:w-96 animate-chat-msg">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 mb-2">
+                        <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Прикрепить документ</span>
+                        <button onclick="toggleAttachPopover()" class="text-slate-400 hover:text-slate-600 text-xs">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mb-2">Выберите файл. ИИ автоматически распознает тип документа и все реквизиты:</p>
+                    
+                    <button onclick="triggerFilePicker()" class="w-full text-left p-3 rounded-xl border border-dashed border-brand-300 hover:border-brand-500 hover:bg-brand-50/50 transition-all flex items-center space-x-3 group mb-2">
+                        <div class="w-9 h-9 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center shrink-0 group-hover:bg-brand-600 group-hover:text-white transition-colors">
+                            <i class="fa-solid fa-cloud-arrow-up text-base"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs font-semibold text-slate-800">Загрузить файл с устройства</div>
+                            <div class="text-[10px] text-slate-500">PDF, JPG, PNG или DOCX</div>
+                        </div>
+                    </button>
+
+                    <!-- Fast Demo Pre-set triggers -->
+                    <div class="pt-2 border-t border-slate-100 space-y-1">
+                        <span class="text-[10px] text-slate-400 block font-medium">Быстрая имитация загрузки:</span>
+                        <div class="grid grid-cols-1 gap-1">
+                            <button onclick="loadDemoAttachment('Справка об обучении')" class="text-left text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-brand-50 text-slate-700 hover:text-brand-700 flex items-center justify-between transition-colors">
+                                <span>🎓 Справка об обучении</span>
+                                <i class="fa-solid fa-arrow-right text-[10px] text-brand-500"></i>
+                            </button>
+                            <button onclick="loadDemoAttachment('Заявление на акад. отпуск')" class="text-left text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-brand-50 text-slate-700 hover:text-brand-700 flex items-center justify-between transition-colors">
+                                <span>📜 Заявление на акад. отпуск</span>
+                                <i class="fa-solid fa-arrow-right text-[10px] text-brand-500"></i>
+                            </button>
+                            <button onclick="loadDemoAttachment('Справка о практике')" class="text-left text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-brand-50 text-slate-700 hover:text-brand-700 flex items-center justify-between transition-colors">
+                                <span>💼 Справка о практике</span>
+                                <i class="fa-solid fa-arrow-right text-[10px] text-brand-500"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hidden Input for actual file upload -->
+                <input type="file" id="real-file-input" class="hidden" accept="image/*,.pdf,.doc,.docx" onchange="handleFileSelected(event)">
+
+                <!-- Main Form -->
+                <form onsubmit="handleSendMessage(event)" class="flex items-center space-x-2">
+                    
+                    <!-- Paperclip Button -->
+                    <button type="button" onclick="toggleAttachPopover()" id="clip-button" title="Прикрепить документ"
+                        class="w-10 h-10 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-600 flex items-center justify-center transition-all shrink-0 border border-brand-200">
+                        <i class="fa-solid fa-paperclip text-base"></i>
+                    </button>
+
+                    <!-- Text Field -->
+                    <input type="text" id="chat-input" required placeholder="Напишите вопрос ИИ-помощнику..."
+                        class="flex-1 px-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all">
+
+                    <!-- Send Button -->
+                    <button type="submit" class="w-10 h-10 bg-brand-600 hover:bg-brand-700 text-white rounded-xl transition-all shadow-md shadow-brand-500/20 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-paper-plane text-sm"></i>
+                    </button>
+                </form>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Edit Extracted Data Modal -->
+    <div id="editDataModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative animate-chat-msg max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <button onclick="toggleModal('editDataModal')" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-user-pen text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-slate-900">Редактирование реквизитов</h3>
+                    <p class="text-xs text-slate-500">Проверьте и скорректируйте распознанные поля</p>
+                </div>
+            </div>
+            
+            <form onsubmit="saveEditedData(event)" class="space-y-3.5 text-sm">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Тип документа</label>
+                    <select id="edit-doc-type" onchange="renderModalFieldsByDocType(this.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                        <option value="Справка об обучении">Справка об обучении</option>
+                        <option value="Заявление на академический отпуск">Заявление на академический отпуск</option>
+                        <option value="Справка о практике">Справка о практике</option>
+                    </select>
+                </div>
+
+                <!-- Dynamic Form Fields Container -->
+                <div id="dynamic-edit-fields" class="space-y-3">
+                    <!-- Dynamic inputs populated via JS -->
+                </div>
+
+                <div class="mt-6 flex items-center justify-end space-x-2 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="toggleModal('editDataModal')" class="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg text-xs font-medium hover:bg-slate-50">
+                        Отмена
+                    </button>
+                    <button type="submit" class="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-semibold shadow-md shadow-brand-500/20">
+                        Сохранить изменения
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- University Info Modal -->
+    <div id="infoModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative animate-chat-msg">
+            <button onclick="toggleModal('infoModal')" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+                    <i class="fa-solid fa-university text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-slate-900">О ВУЗе и Деканате</h3>
+                    <p class="text-xs text-slate-500">Государственный Университет</p>
+                </div>
+            </div>
+            
+            <div class="space-y-4 text-sm text-slate-600 border-t border-slate-100 pt-4">
+                <div>
+                    <h4 class="font-semibold text-slate-800 text-xs uppercase tracking-wider mb-1">Режим работы</h4>
+                    <p>Понедельник — Пятница: 09:00 - 18:00<br>Перерыв: 13:00 - 14:00</p>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-slate-800 text-xs uppercase tracking-wider mb-1">Контакты единой приёмной</h4>
+                    <p><i class="fa-solid fa-phone text-slate-400 mr-2"></i> +7 (800) 555-35-35</p>
+                    <p><i class="fa-solid fa-envelope text-slate-400 mr-2"></i> dekanat@university.edu.ru</p>
+                    <p><i class="fa-solid fa-location-dot text-slate-400 mr-2"></i> Главный корпус, каб. 302</p>
+                </div>
+                <div class="p-3 bg-brand-50/60 rounded-lg text-xs text-brand-900 border border-brand-100">
+                    ИИ-помощник автоматически распознает документы (Справка об обучении, Заявление на акад. отпуск, Справка о практике), извлекая ФИО, ВУЗ, даты, печать и подпись.
+                </div>
+            </div>
+
+            <div class="mt-6 text-right">
+                <button onclick="toggleModal('infoModal')" class="bg-navy-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
+                    Понятно
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        const state = {
+            activeDocument: null // Stores OCR extracted document info
+        };
+
+        // Schema definition strictly matching the image specification
+        const DOC_SCHEMAS = {
+            'Справка об обучении': {
+                fields: [
+                    { id: 'fio', label: 'ФИО студента', default: 'Иванова Мария Алексеевна', type: 'text' },
+                    { id: 'vuz', label: 'Название вуза', default: 'ФГБОУ ВО «Государственный Университет»', type: 'text' },
+                    { id: 'specialty', label: 'Направление подготовки', default: '09.03.01 Информатика и вычислительная техника', type: 'text' },
+                    { id: 'studyForm', label: 'Форма обучения', default: 'Очная (бюджет)', type: 'text' },
+                    { id: 'period', label: 'Период обучения', default: '01.09.2023 — 30.06.2027', type: 'text' },
+                    { id: 'issueNoDate', label: 'Номер и дата выдачи', default: '№ 458/24 от 12.02.2026', type: 'text' },
+                    { id: 'hasSignAndStamp', label: 'Подпись и печать (есть/нет)', default: 'Есть', type: 'select', options: ['Есть', 'Нет'] }
+                ]
+            },
+            'Заявление на академический отпуск': {
+                fields: [
+                    { id: 'fio', label: 'ФИО студента', default: 'Иванова Мария Алексеевна', type: 'text' },
+                    { id: 'groupCourse', label: 'Группа и курс', default: 'Группа ИВТ-301, 3 курс', type: 'text' },
+                    { id: 'reason', label: 'Причина отпуска', default: 'По медицинским показаниям', type: 'text' },
+                    { id: 'startDate', label: 'Дата начала отпуска', default: '01.11.2026', type: 'text' },
+                    { id: 'endDate', label: 'Дата окончания отпуска', default: '01.11.2027', type: 'text' },
+                    { id: 'appDate', label: 'Дата заявления', default: '15.10.2026', type: 'text' },
+                    { id: 'hasStudentSign', label: 'Подпись студента (есть/нет)', default: 'Есть', type: 'select', options: ['Есть', 'Нет'] }
+                ]
+            },
+            'Справка о практике': {
+                fields: [
+                    { id: 'fio', label: 'ФИО студента', default: 'Иванова Мария Алексеевна', type: 'text' },
+                    { id: 'organization', label: 'Организация', default: 'ООО «Технологии и Системы»', type: 'text' },
+                    { id: 'practiceDates', label: 'Сроки практики', default: '01.06.2026 — 12.07.2026', type: 'text' },
+                    { id: 'supervisor', label: 'Руководитель практики', default: 'Петров С. В., гл. инженер', type: 'text' },
+                    { id: 'grade', label: 'Оценка', default: 'Отлично (5)', type: 'text' },
+                    { id: 'issueNoDate', label: 'Номер и дата выдачи', default: '№ 102-П от 15.07.2026', type: 'text' },
+                    { id: 'hasSignAndStamp', label: 'Подпись и печать (есть/нет)', default: 'Есть', type: 'select', options: ['Есть', 'Нет'] }
+                ]
+            }
+        };
+
+        function toggleModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.classList.toggle('hidden');
+        }
+
+        function toggleAttachPopover() {
+            const popover = document.getElementById('attach-popover');
+            popover.classList.toggle('hidden');
+        }
+
+        function triggerFilePicker() {
+            toggleAttachPopover();
+            document.getElementById('real-file-input').click();
+        }
+
+        function handleFileSelected(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const fileNameLower = file.name.toLowerCase();
+            let autoDocType = 'Справка об обучении';
+            if (fileNameLower.includes('акад') || fileNameLower.includes('отпуск') || fileNameLower.includes('заявлен')) {
+                autoDocType = 'Заявление на академический отпуск';
+            } else if (fileNameLower.includes('практик')) {
+                autoDocType = 'Справка о практике';
+            }
+
+            processDocumentAttachment(file.name, autoDocType);
+            event.target.value = '';
+        }
+
+        function loadDemoAttachment(suggestedType) {
+            toggleAttachPopover();
+            const demoName = suggestedType === 'Заявление на академический отпуск' ? 'заявление_отпуск_скан.pdf' 
+                           : suggestedType === 'Справка о практике' ? 'справка_практика_печать.jpg' 
+                           : 'справка_обучение_2026.pdf';
+            processDocumentAttachment(demoName, suggestedType);
+        }
+
+        function processDocumentAttachment(filename, autoDocType) {
+            appendUserFileMessage(filename);
+
+            const thinkingId = appendBotThinking('ИИ сканирует документ, определяет тип и извлекает реквизиты...');
+
+            setTimeout(() => {
+                removeMessage(thinkingId);
+
+                const schema = DOC_SCHEMAS[autoDocType] || DOC_SCHEMAS['Справка об обучении'];
+                const extractedData = {};
+                schema.fields.forEach(f => {
+                    extractedData[f.id] = f.default;
+                });
+
+                state.activeDocument = {
+                    docType: autoDocType,
+                    data: extractedData
+                };
+
+                appendDataVerificationCard();
+                updateActiveDocBadge();
+            }, 1200);
+        }
+
+        function updateActiveDocBadge() {
+            if (state.activeDocument) {
+                const badge = document.getElementById('active-doc-indicator');
+                const badgeText = document.getElementById('active-doc-name-badge');
+                badgeText.textContent = `${state.activeDocument.docType}`;
+                badge.classList.remove('hidden');
+            }
+        }
+
+        function appendDataVerificationCard() {
+            const doc = state.activeDocument;
+            const schema = DOC_SCHEMAS[doc.docType];
+            const chatContainer = document.getElementById('chat-messages');
+            const messageEl = document.createElement('div');
+            messageEl.className = "flex items-start space-x-3 max-w-2xl animate-chat-msg";
+
+            let fieldsHtml = '';
+            schema.fields.forEach(f => {
+                const val = doc.data[f.id] || '—';
+                const isStatus = f.type === 'select';
+                const statusBadgeClass = val === 'Есть' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800';
+
+                fieldsHtml += `
+                    <div class="flex justify-between items-center border-b border-slate-200/60 pb-1.5 pt-0.5">
+                        <span class="text-slate-500 font-medium">${escapeHtml(f.label)}:</span>
+                        ${isStatus ? 
+                            `<span class="px-2 py-0.5 text-[10px] rounded font-semibold ${statusBadgeClass}">${escapeHtml(val)}</span>` : 
+                            `<span class="font-semibold text-slate-900 text-right max-w-[240px] truncate">${escapeHtml(val)}</span>`
+                        }
+                    </div>
+                `;
+            });
+
+            messageEl.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center shrink-0 text-xs shadow-sm">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm text-sm text-slate-800 space-y-3">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <span class="text-xs font-bold text-brand-600 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Автоматически распознано
+                        </span>
+                        <span class="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-medium">Успешно</span>
+                    </div>
+
+                    <div class="bg-brand-50/40 p-3.5 rounded-xl border border-brand-100 text-xs space-y-1.5 font-sans">
+                        <div class="flex justify-between border-b border-slate-200/80 pb-1.5 mb-1">
+                            <span class="text-slate-500 font-semibold">Тип документа:</span>
+                            <span class="font-bold text-brand-700">${escapeHtml(doc.docType)}</span>
+                        </div>
+                        ${fieldsHtml}
+                    </div>
+
+                    <p class="text-xs font-medium text-slate-800">Данные распознаны корректно?</p>
+
+                    <div class="flex flex-wrap items-center gap-2 pt-1">
+                        <button onclick="confirmDataCorrect()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors inline-flex items-center gap-1 shadow-sm">
+                            <i class="fa-solid fa-check"></i> Да, всё верно
+                        </button>
+                        <button onclick="openEditModal()" class="bg-white hover:bg-brand-50 text-slate-700 border border-slate-300 hover:border-brand-300 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors inline-flex items-center gap-1 shadow-sm">
+                            <i class="fa-solid fa-pen-to-square text-brand-600"></i> Изменить вручную
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            chatContainer.appendChild(messageEl);
+            scrollToBottom();
+        }
+
+        function openEditModal() {
+            if (!state.activeDocument) return;
+            document.getElementById('edit-doc-type').value = state.activeDocument.docType;
+            renderModalFieldsByDocType(state.activeDocument.docType);
+            toggleModal('editDataModal');
+        }
+
+        function renderModalFieldsByDocType(docType) {
+            const container = document.getElementById('dynamic-edit-fields');
+            container.innerHTML = '';
+            const schema = DOC_SCHEMAS[docType] || DOC_SCHEMAS['Справка об обучении'];
+            const currentData = (state.activeDocument && state.activeDocument.docType === docType) ? state.activeDocument.data : {};
+
+            schema.fields.forEach(f => {
+                const wrapper = document.createElement('div');
+                const val = currentData[f.id] !== undefined ? currentData[f.id] : f.default;
+
+                if (f.type === 'select') {
+                    wrapper.innerHTML = `
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">${escapeHtml(f.label)}</label>
+                        <select data-field-id="${f.id}" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                            ${f.options.map(opt => `<option value="${opt}" ${val === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                        </select>
+                    `;
+                } else {
+                    wrapper.innerHTML = `
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">${escapeHtml(f.label)}</label>
+                        <input type="text" data-field-id="${f.id}" value="${escapeHtml(val)}" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                    `;
+                }
+                container.appendChild(wrapper);
+            });
+        }
+
+        function saveEditedData(e) {
+            e.preventDefault();
+            const docType = document.getElementById('edit-doc-type').value;
+            const container = document.getElementById('dynamic-edit-fields');
+            const inputs = container.querySelectorAll('[data-field-id]');
+            
+            const newData = {};
+            inputs.forEach(input => {
+                const fieldId = input.getAttribute('data-field-id');
+                newData[fieldId] = input.value;
+            });
+
+            state.activeDocument = {
+                docType: docType,
+                data: newData
+            };
+
+            toggleModal('editDataModal');
+            updateActiveDocBadge();
+
+            appendBotMessage(`
+                <p class="text-emerald-700 font-medium">✓ Реквизиты документа обновлены вручную!</p>
+                <p class="text-xs text-slate-600 mt-1">Документ <strong>«${escapeHtml(docType)}»</strong> готов к дальнейшей обработке.</p>
+            `);
+        }
+
+        function confirmDataCorrect() {
+            appendUserMessage("Данные распознаны верно, подтверждаю!");
+            
+            setTimeout(() => {
+                appendBotMessage(`
+                    <p class="text-slate-800">Отлично! Документ <strong>«${escapeHtml(state.activeDocument.docType)}»</strong> проверен и зарегистрирован в единой базе деканата.</p>
+                    <p class="text-xs text-slate-600 mt-1">Вы можете задать любой вопрос по данному документу или процессам обучения.</p>
+                `);
+            }, 600);
+        }
+
+        function sendQuickQuestion(questionText) {
+            document.getElementById('chat-input').value = questionText;
+            handleSendMessage();
+        }
+
+        function handleSendMessage(e) {
+            if (e) e.preventDefault();
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            appendUserMessage(message);
+            input.value = '';
+
+            const thinkingId = appendBotThinking('ИИ-помощник генерирует ответ...');
+
+            setTimeout(() => {
+                removeMessage(thinkingId);
+                const botReply = generateAIResponse(message);
+                appendBotMessage(botReply);
+            }, 800);
+        }
+
+        function appendUserMessage(text) {
+            const chatContainer = document.getElementById('chat-messages');
+            const messageEl = document.createElement('div');
+            messageEl.className = "flex items-start justify-end space-x-3 animate-chat-msg";
+            
+            messageEl.innerHTML = `
+                <div class="bg-brand-600 text-white rounded-2xl rounded-tr-none p-3.5 shadow-sm text-sm max-w-xl">
+                    <p>${escapeHtml(text)}</p>
+                </div>
+                <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center shrink-0 text-xs font-bold shadow-sm">
+                    С
+                </div>
+            `;
+            chatContainer.appendChild(messageEl);
+            scrollToBottom();
+        }
+
+        function appendUserFileMessage(filename) {
+            const chatContainer = document.getElementById('chat-messages');
+            const messageEl = document.createElement('div');
+            messageEl.className = "flex items-start justify-end space-x-3 animate-chat-msg";
+
+            messageEl.innerHTML = `
+                <div class="bg-brand-700 text-white rounded-2xl rounded-tr-none p-3.5 shadow-sm text-sm max-w-xl space-y-1">
+                    <div class="flex items-center space-x-2 bg-brand-800/60 p-2 rounded-lg border border-brand-500/40">
+                        <i class="fa-solid fa-file-pdf text-pink-200 text-lg"></i>
+                        <div class="overflow-hidden">
+                            <p class="text-xs font-semibold truncate">${escapeHtml(filename)}</p>
+                            <p class="text-[10px] text-brand-200">Отправлено на сканирование реквизитов</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center shrink-0 text-xs font-bold shadow-sm">
+                    С
+                </div>
+            `;
+            chatContainer.appendChild(messageEl);
+            scrollToBottom();
+        }
+
+        function appendBotThinking(label) {
+            const chatContainer = document.getElementById('chat-messages');
+            const id = 'thinking-' + Date.now();
+            const messageEl = document.createElement('div');
+            messageEl.id = id;
+            messageEl.className = "flex items-start space-x-3 max-w-xl animate-chat-msg";
+            messageEl.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center shrink-0 text-xs shadow-sm">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-3 shadow-sm text-xs text-slate-500 flex items-center space-x-2">
+                    <i class="fa-solid fa-circle-notch animate-spin text-brand-600"></i>
+                    <span>${escapeHtml(label)}</span>
+                </div>
+            `;
+            chatContainer.appendChild(messageEl);
+            scrollToBottom();
+            return id;
+        }
+
+        function appendBotMessage(htmlContent) {
+            const chatContainer = document.getElementById('chat-messages');
+            const messageEl = document.createElement('div');
+            messageEl.className = "flex items-start space-x-3 max-w-2xl animate-chat-msg";
+            messageEl.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center shrink-0 text-xs shadow-sm">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm text-sm text-slate-800 space-y-2">
+                    ${htmlContent}
+                </div>
+            `;
+            chatContainer.appendChild(messageEl);
+            scrollToBottom();
+        }
+
+        function removeMessage(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        function scrollToBottom() {
+            const chatContainer = document.getElementById('chat-messages');
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function resetChat() {
+            location.reload();
+        }
+
+        function generateAIResponse(userText) {
+            const query = userText.toLowerCase();
+            const doc = state.activeDocument;
+            const fio = doc ? doc.data.fio || 'Студента' : 'Студента';
+
+            if (query.includes('справк') && (query.includes('обучен') || query.includes('эцп'))) {
+                if (doc && doc.docType === 'Справка об обучении') {
+                    return `
+                        <p>На основе вашей справки (${escapeHtml(fio)}) сформирован электронный дубликат с ЭЦП декана.</p>
+                        <div class="text-xs bg-brand-50/50 p-3 rounded-xl border border-brand-100 space-y-1 my-2">
+                            <p><strong>Направление:</strong> ${escapeHtml(doc.data.specialty)}</p>
+                            <p><strong>Форма:</strong> ${escapeHtml(doc.data.studyForm)}</p>
+                            <p><strong>Выдано:</strong> ${escapeHtml(doc.data.issueNoDate)}</p>
+                        </div>
+                        <button onclick="alert('Файл справки с ЭЦП сохранен!')" class="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-colors inline-flex items-center gap-1.5">
+                            <i class="fa-solid fa-download"></i> Скачать документ (PDF)
+                        </button>
+                    `;
+                }
+                return `<p>Вы можете запросить справку об обучении. Прикрепите существующую справку через <i class="fa-solid fa-paperclip text-brand-600"></i> для мгновенной выгрузки.</p>`;
+            } else if (query.includes('акад') || query.includes('отпуск')) {
+                if (doc && doc.docType === 'Заявление на академический отпуск') {
+                    return `
+                        <p>Заявление на академический отпуск зарегистрировано.</p>
+                        <p class="text-xs text-slate-600 mt-1">Причина: <strong>${escapeHtml(doc.data.reason)}</strong>. Период отпуска: с ${escapeHtml(doc.data.startDate)} по ${escapeHtml(doc.data.endDate)}.</p>
+                    `;
+                }
+                return `<p>Для отправки приказа на академический отпуск прикрепите сканированное заявление с вашей подписью.</p>`;
+            } else if (query.includes('практик')) {
+                if (doc && doc.docType === 'Справка о практике') {
+                    return `
+                        <p>Справка о прохождении практики в организации <strong>${escapeHtml(doc.data.organization)}</strong> подтверждена.</p>
+                        <p class="text-xs text-slate-600 mt-1">Итоговая оценка: <strong>${escapeHtml(doc.data.grade)}</strong>, Руководитель: ${escapeHtml(doc.data.supervisor)}.</p>
+                    `;
+                }
+                return `<p>Справку о практике необходимо сдать с печатью профильной организации и оценкой руководителя.</p>`;
+            } else {
+                return `
+                    <p>Спасибо за ваш запрос!</p>
+                    <p class="text-xs text-slate-600 mt-1">Обращение принято к рассмотрению. Номер обращения: <strong>№REQ-${Math.floor(1000 + Math.random() * 9000)}</strong>.</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
