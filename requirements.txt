@@ -1,8 +1,15 @@
+#распознование текста
 paddlepaddle
 paddleocr>=3.0
+
+#обработка изображений и PDF-файлов
 pymupdf
 pillow
 numpy
 opencv-python-headless
+
+#инструмент для текстового поиска
 rank-bm25>=0.2.2
+
+#запускает локальную языковую модель
 llama-cpp-python>=0.2.26
