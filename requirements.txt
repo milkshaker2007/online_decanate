@@ -4,3 +4,5 @@ pymupdf
 pillow
 numpy
 opencv-python-headless
+rank-bm25>=0.2.2
+llama-cpp-python>=0.2.26
