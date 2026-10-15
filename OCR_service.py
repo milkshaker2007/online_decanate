@@ -10,21 +10,13 @@ from paddleocr import PaddleOCR
 from extract_fields import extract_fields  
 from marks_detector import detect_marks   
 
-# Порог для объединения фрагментов в одну строку: доля от медианной высоты текста.
-# Если строки рвутся — увеличьте (0.7), если соседние строки склеиваются — уменьшите (0.3).
 LINE_MERGE_RATIO = 0.5
-
-
 MIN_PDF_TEXT_LENGTH = 30
-
-# Встроенные в PDF картинки (штамп ЭП, печать, подпись) распознаются отдельно,
-# потому что в текстовый слой они не попадают.
 OCR_PDF_IMAGES = True
 MIN_IMAGE_WIDTH = 40      
 MIN_IMAGE_HEIGHT = 20
 MAX_IMAGE_PAGE_SHARE = 0.6  
 MAX_IMAGES_PER_PAGE = 10
-
 
 PDF_SIGNATURE_MARKER = "ДОКУМЕНТ ПОДПИСАН ЭЛЕКТРОННОЙ ПОДПИСЬЮ"
 
@@ -34,20 +26,31 @@ def get_ocr():
     """Создаёт OCR один раз при первом использовании."""
     return PaddleOCR(
         lang="ru",
-        use_doc_orientation_classify=False,
-        use_doc_unwarping=False,
-        use_textline_orientation=False,
+        use_angle_cls=False,
+        show_log=False
     )
 
 
 def _lines_from_boxes(texts, boxes):
     """Склеивает фрагменты OCR, лежащие на одной горизонтали, в строки."""
+    if not boxes or not texts:
+        return []
+
     items = []
     for text, box in zip(texts, boxes):
         text = str(text).strip()
         if not text:
             continue
-        x1, y1, x2, y2 = [float(v) for v in box]
+        
+        box_np = np.array(box)
+        if box_np.size == 0 or len(box_np.shape) < 2:
+            continue
+            
+        x1 = float(np.min(box_np[:, 0]))
+        y1 = float(np.min(box_np[:, 1]))
+        x2 = float(np.max(box_np[:, 0]))
+        y2 = float(np.max(box_np[:, 1]))
+        
         items.append(
             {
                 "text": text,
@@ -65,7 +68,6 @@ def _lines_from_boxes(texts, boxes):
 
     rows = []
     for item in items:
-        # фрагмент относится к текущей строке, если центры почти совпадают по вертикали
         if rows and abs(item["cy"] - rows[-1]["cy"]) < median_h * LINE_MERGE_RATIO:
             row = rows[-1]
             row["items"].append(item)
@@ -82,24 +84,38 @@ def _lines_from_boxes(texts, boxes):
 def recognize_image(image):
     """Распознаёт текст на изображении."""
     image_array = np.array(image.convert("RGB"))
-    results = get_ocr().predict(image_array)
+    results = get_ocr().ocr(image_array)
+
+    if not results or results is None:
+        return ""
 
     lines = []
-    for result in results:
-        data = result.json
-        if callable(data):
-            data = data()
-        if isinstance(data, dict) and "res" in data:
-            data = data["res"]
-        if not isinstance(data, dict):
+    for page_res in results:
+        if not page_res:
             continue
-
-        texts = data.get("rec_texts", [])
-        boxes = data.get("rec_boxes")
-        if boxes is None or len(boxes) != len(texts):
-            lines.extend(texts)  # запасной вариант без координат
-        else:
+        texts = []
+        boxes = []
+        for res in page_res:
+            if not res or len(res) < 2:
+                continue
+            
+            # Исправлено: извлекаем строго чистую текстовую строку из структуры PaddleOCR,
+            # полностью избавляясь от чисел уверенности, ломавших регулярные выражения
+            box = res[0]
+            text_data = res[1]
+            
+            if isinstance(text_data, (list, tuple)) and len(text_data) > 0:
+                text_str = str(text_data[0]).strip()
+            else:
+                text_str = str(text_data).strip()
+                
+            texts.append(text_str)
+            boxes.append(box)
+        
+        if boxes and len(boxes) == len(texts):
             lines.extend(_lines_from_boxes(texts, boxes))
+        else:
+            lines.extend(texts)
 
     return "\n".join(lines)
 
@@ -109,18 +125,18 @@ def _pdf_page_text(page):
     blocks = page.get_text("blocks", sort=True)
     paragraphs = []
     for block in blocks:
-        if block[6] != 0:  # 0 = текстовый блок, остальное — картинки
+        if block[6] != 0:  
             continue
         text = block[4]
-        text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)  # слова, перенесённые через дефис
-        text = re.sub(r"\s*\n\s*", " ", text).strip()  # переносы внутри блока -> пробел
+        text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)  
+        text = re.sub(r"\s*\n\s*", " ", text).strip()  
         if text:
             paragraphs.append(text)
     return "\n".join(paragraphs)
 
 
 def _pdf_images_text(page):
-    """Распознаёт встроенные картинки страницы (штамп ЭП, печать), которых нет в текстовом слое."""
+    """Распознаёт встроенные картинки страницы (штамп ЭП, печать)."""
     page_area = max(page.rect.width * page.rect.height, 1.0)
     texts = []
     for info in page.get_image_info()[:MAX_IMAGES_PER_PAGE]:
@@ -128,7 +144,7 @@ def _pdf_images_text(page):
         if bbox.is_empty or bbox.width < MIN_IMAGE_WIDTH or bbox.height < MIN_IMAGE_HEIGHT:
             continue
         if bbox.width * bbox.height > page_area * MAX_IMAGE_PAGE_SHARE:
-            continue  # скан всей страницы: текст из него уже есть в текстовом слое
+            continue  
 
         pix = page.get_pixmap(matrix=fitz.Matrix(3, 3), clip=bbox, alpha=False)
         image = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
@@ -139,24 +155,21 @@ def _pdf_images_text(page):
 
 
 def _pdf_has_digital_signature(document):
-    """True, если в PDF есть цифровая подпись (поле подписи с подписью)."""
+    """True, если в PDF есть цифровая подпись."""
     try:
         flags = document.get_sigflags()
     except Exception:
         return False
-    # -1 = нет AcroForm, 0 = полей подписи нет, 1 и 3 = подпись существует
     return flags > 0 and bool(flags & 1)
 
 
 def extract_text(file_path):
     """Извлекает текст из JPG, PNG или PDF."""
     path = Path(file_path)
-
     if not path.is_file():
         raise FileNotFoundError(f"Файл не найден: {path}")
 
     extension = path.suffix.lower()
-
     if extension in (".jpg", ".jpeg", ".png"):
         with Image.open(path) as image:
             return recognize_image(image)
@@ -165,11 +178,9 @@ def extract_text(file_path):
         pages_text = []
         with fitz.open(path) as document:
             for page in document:
-                # Если в PDF есть текстовый слой, используем его вместо OCR
                 text = _pdf_page_text(page).strip()
                 if len(text) >= MIN_PDF_TEXT_LENGTH:
                     if OCR_PDF_IMAGES:
-                        # штамп ЭП обычно картинка, в текстовом слое его нет
                         images_text = _pdf_images_text(page)
                         if images_text:
                             text = text + "\n" + images_text
@@ -192,5 +203,3 @@ def process_document(file_path, doc_type=None):
     text = extract_text(file_path)
     marks = detect_marks(file_path)
     return extract_fields(text, doc_type=doc_type, marks=marks)
-
-
