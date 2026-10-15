@@ -217,8 +217,8 @@
                     </button>
 
                     <!-- Text Field -->
-                    <input type="text" id="chat-input" required placeholder="Напишите вопрос ИИ-помощнику..."
-                        class="flex-1 px-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all">
+                    <input type="text" id="chat-input" placeholder="Напишите вопрос ИИ-помощнику..."
+    class="flex-1 px-4 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all">
 
                     <!-- Send Button -->
                     <button type="submit" class="w-10 h-10 bg-brand-600 hover:bg-brand-700 text-white rounded-xl transition-all shadow-md shadow-brand-500/20 flex items-center justify-center shrink-0">
@@ -316,10 +316,10 @@
     <!-- Application Logic -->
     <script>
         const state = {
-            activeDocument: null // Stores OCR extracted document info
+            activeDocument: null // Здесь хранятся извлеченные данные
         };
 
-        // Schema definition strictly matching the image specification
+        // Схемы полей строго по вашему ТЗ
         const DOC_SCHEMAS = {
             'Справка об обучении': {
                 fields: [
@@ -356,6 +356,7 @@
             }
         };
 
+        // Функции управления интерфейсом (из вашего исходного кода)
         function toggleModal(id) {
             const modal = document.getElementById(id);
             if (modal) modal.classList.toggle('hidden');
@@ -363,7 +364,7 @@
 
         function toggleAttachPopover() {
             const popover = document.getElementById('attach-popover');
-            popover.classList.toggle('hidden');
+            if (popover) popover.classList.toggle('hidden');
         }
 
         function triggerFilePicker() {
@@ -383,7 +384,7 @@
                 autoDocType = 'Справка о практике';
             }
 
-            processDocumentAttachment(file.name, autoDocType);
+            processDocumentAttachment(file, autoDocType);
             event.target.value = '';
         }
 
@@ -395,43 +396,109 @@
             processDocumentAttachment(demoName, suggestedType);
         }
 
-        function processDocumentAttachment(filename, autoDocType) {
-            appendUserFileMessage(filename);
-
-            const thinkingId = appendBotThinking('ИИ сканирует документ, определяет тип и извлекает реквизиты...');
-
-            setTimeout(() => {
-                removeMessage(thinkingId);
-
-                const schema = DOC_SCHEMAS[autoDocType] || DOC_SCHEMAS['Справка об обучении'];
-                const extractedData = {};
-                schema.fields.forEach(f => {
-                    extractedData[f.id] = f.default;
-                });
-
-                state.activeDocument = {
-                    docType: autoDocType,
-                    data: extractedData
-                };
-
-                appendDataVerificationCard();
-                updateActiveDocBadge();
-            }, 1200);
-        }
-
         function updateActiveDocBadge() {
             if (state.activeDocument) {
                 const badge = document.getElementById('active-doc-indicator');
                 const badgeText = document.getElementById('active-doc-name-badge');
-                badgeText.textContent = `${state.activeDocument.docType}`;
-                badge.classList.remove('hidden');
+                if (badgeText) badgeText.textContent = `${state.activeDocument.docType}`;
+                if (badge) badge.classList.remove('hidden');
             }
         }
 
+        // --- РЕАЛЬНАЯ ИНТЕГРАЦИЯ: ОТПРАВКА ФАЙЛА НА БЭКЕНД FASTAPI ---
+        async function processDocumentAttachment(fileOrName, autoDocType) {
+            let fileObj;
+            let filename = typeof fileOrName === 'string' ? fileOrName : fileOrName.name;
+
+            if (typeof fileOrName === 'string') {
+                fileObj = new File(["demo_content"], filename, { type: "application/pdf" });
+            } else {
+                fileObj = fileOrName;
+            }
+
+            appendUserFileMessage(filename);
+            const thinkingId = appendBotThinking('ИИ выполняет OCR-распознавание и детекцию печатей...');
+
+            const formData = new FormData();
+            formData.append("file", fileObj);
+            const currentInputText = document.getElementById('chat-input').value.trim(); 
+	    formData.append("question", currentInputText);
+            try {
+                const response = await fetch("/analyze", {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error("Ошибка бэкенда");
+                const result = await response.json();
+                
+                removeMessage(thinkingId);
+
+                const rawFields = result.ocr_extracted_fields || {};
+                
+                // Исправлено: берем реальный тип документа, который определил сервер
+                const serverDocType = rawFields['тип_документа'] || autoDocType;
+                const mappedData = {};
+
+                // Исправлено: маппинг строго по точным ключам из extract_fields.py
+                if (serverDocType === 'Справка об обучении') {
+                    mappedData['fio'] = rawFields['ФИО студента'] || 'не найдено';
+                    mappedData['vuz'] = rawFields['Название вуза'] || 'не найдено';
+                    mappedData['specialty'] = rawFields['Направление подготовки'] || 'не найдено';
+                    mappedData['studyForm'] = rawFields['Форма обучения'] || 'не найдено';
+                    mappedData['period'] = rawFields['Период обучения'] || 'не найдено';
+                    mappedData['issueNoDate'] = rawFields['Номер и дата выдачи'] || 'не найдено';
+                    mappedData['hasSignAndStamp'] = rawFields['Подпись и печать'] === 'есть' ? 'Есть' : 'Нет';
+                } else if (serverDocType === 'Заявление на академический отпуск') {
+                    mappedData['fio'] = rawFields['ФИО студента'] || 'не найдено';
+                    mappedData['groupCourse'] = rawFields['Группа и курс'] || 'не найдено';
+                    mappedData['reason'] = rawFields['Причина отпуска'] || 'не найдено';
+                    mappedData['startDate'] = rawFields['Дата начала'] || 'не найдено';
+                    mappedData['endDate'] = rawFields['Дата окончания'] || 'не найдено';
+                    mappedData['appDate'] = rawFields['Дата заявления'] || 'не найдено';
+                    mappedData['hasStudentSign'] = rawFields['Подпись студента'] === 'есть' ? 'Есть' : 'Нет';
+                } else {
+                    mappedData['fio'] = rawFields['ФИО студента'] || 'не найдено';
+                    mappedData['organization'] = rawFields['Организация'] || 'не найдено';
+                    mappedData['practiceDates'] = rawFields['Сроки практики'] || 'не найдено';
+                    mappedData['supervisor'] = rawFields['Руководитель практики'] || 'не найдено';
+                    mappedData['grade'] = rawFields['Оценка'] || 'не найдено';
+                    mappedData['issueNoDate'] = rawFields['Номер и дата выдачи'] || 'не найдено';
+                    mappedData['hasSignAndStamp'] = rawFields['Подпись и печать'] === 'есть' ? 'Есть' : 'Нет';
+                }
+
+                state.activeDocument = {
+                    docType: serverDocType,
+                    data: mappedData,
+                    rawServerResponse: result 
+                };
+
+                appendDataVerificationCard();
+                updateActiveDocBadge();
+
+                if (result.rag_analysis && result.rag_analysis.final_answer) {
+                    setTimeout(() => {
+                        appendBotMessage(result.rag_analysis.final_answer);
+                    }, 300);
+                }
+
+            } catch (error) {
+                removeMessage(thinkingId);
+                // Выводим реальную ошибку парсинга JS вместо шаблонной фразы про бэкенд
+                appendBotMessage(`❌ Ошибка на фронтенде при обработке ответа: ${error.message}. Проверьте консоль браузера (F12 -> Console).`);
+            }
+        }
+        // --- ЧАСТЬ 2: РЕНДЕРИНГ КАРТОЧКИ ВЕРИФИКАЦИИ И МОДАЛЬНОГО ОКНА ---
+
         function appendDataVerificationCard() {
             const doc = state.activeDocument;
-            const schema = DOC_SCHEMAS[doc.docType];
+            
+            // Исправлено: если тип документа не определен ("не найдено"), 
+            // используем схему Справки об обучении в качестве базовой, чтобы UI не падал
+            const schema = DOC_SCHEMAS[doc.docType] || DOC_SCHEMAS['Справка об обучении'];
+            
             const chatContainer = document.getElementById('chat-messages');
+            if (!schema) return; // Дополнительная защита
             const messageEl = document.createElement('div');
             messageEl.className = "flex items-start space-x-3 max-w-2xl animate-chat-msg";
 
@@ -439,15 +506,21 @@
             schema.fields.forEach(f => {
                 const val = doc.data[f.id] || '—';
                 const isStatus = f.type === 'select';
-                const statusBadgeClass = val === 'Есть' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800';
+                const isNotFound = val === 'не найдено' || val === 'Нет';
+                
+                let valHtml = '';
+                if (isStatus) {
+                    const statusBadgeClass = val === 'Есть' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800';
+                    valHtml = `<span class="px-2 py-0.5 text-[10px] rounded font-semibold ${statusBadgeClass}">${escapeHtml(val)}</span>`;
+                } else {
+                    const textClass = isNotFound ? 'text-rose-600 font-medium bg-rose-50 px-1.5 py-0.5 rounded' : 'font-semibold text-slate-900';
+                    valHtml = `<span class="${textClass} text-right max-w-[240px] truncate">${escapeHtml(val)}</span>`;
+                }
 
                 fieldsHtml += `
                     <div class="flex justify-between items-center border-b border-slate-200/60 pb-1.5 pt-0.5">
                         <span class="text-slate-500 font-medium">${escapeHtml(f.label)}:</span>
-                        ${isStatus ? 
-                            `<span class="px-2 py-0.5 text-[10px] rounded font-semibold ${statusBadgeClass}">${escapeHtml(val)}</span>` : 
-                            `<span class="font-semibold text-slate-900 text-right max-w-[240px] truncate">${escapeHtml(val)}</span>`
-                        }
+                        ${valHtml}
                     </div>
                 `;
             });
@@ -456,7 +529,7 @@
                 <div class="w-8 h-8 rounded-full bg-brand-600 text-white flex items-center justify-center shrink-0 text-xs shadow-sm">
                     <i class="fa-solid fa-robot"></i>
                 </div>
-                <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm text-sm text-slate-800 space-y-3">
+                <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm text-sm text-slate-800 space-y-3 w-full">
                     <div class="flex items-center justify-between pb-2 border-b border-slate-100">
                         <span class="text-xs font-bold text-brand-600 uppercase tracking-wider flex items-center gap-1.5">
                             <i class="fa-solid fa-wand-magic-sparkles"></i> Автоматически распознано
@@ -507,10 +580,17 @@
                 const val = currentData[f.id] !== undefined ? currentData[f.id] : f.default;
 
                 if (f.type === 'select') {
+                    // Исправлено: корректный сбор опций без конфликта шаблонных строк
+                    let optionsHtml = '';
+                    f.options.forEach(opt => {
+                        const selected = val === opt ? 'selected' : '';
+                        optionsHtml += `<option value="${opt}" ${selected}>${opt}</option>`;
+                    });
+                    
                     wrapper.innerHTML = `
                         <label class="block text-xs font-semibold text-slate-700 mb-1">${escapeHtml(f.label)}</label>
                         <select data-field-id="${f.id}" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:ring-2 focus:ring-brand-500 focus:outline-none">
-                            ${f.options.map(opt => `<option value="${opt}" ${val === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                            ${optionsHtml}
                         </select>
                     `;
                 } else {
@@ -523,7 +603,7 @@
             });
         }
 
-        function saveEditedData(e) {
+        async function saveEditedData(e) {
             e.preventDefault();
             const docType = document.getElementById('edit-doc-type').value;
             const container = document.getElementById('dynamic-edit-fields');
@@ -544,29 +624,86 @@
             updateActiveDocBadge();
 
             appendBotMessage(`
-                <p class="text-emerald-700 font-medium">✓ Реквизиты документа обновлены вручную!</p>
-                <p class="text-xs text-slate-600 mt-1">Документ <strong>«${escapeHtml(docType)}»</strong> готов к дальнейшей обработке.</p>
+                <p class="text-emerald-700 font-medium"><i class="fa-solid fa-circle-check"></i> Реквизиты документа обновлены вручную!</p>
+                <p class="text-xs text-slate-600 mt-1">Отправляю измененную карточку на повторную валидацию правил в RAG-модуль...</p>
             `);
+
+            const thinkingId = appendBotThinking('Локальная LLM пересчитывает сценарий соответствия...');
+
+            // Исправлено: приводим обратно к русским ключам для Python
+            const pythonFields = {};
+            if (docType === 'Справка об обучении') {
+                pythonFields['тип_документа'] = docType;
+                pythonFields['ФИО студента'] = newData['fio'];
+                pythonFields['Название вуза'] = newData['vuz'];
+                pythonFields['Направление подготовки'] = newData['specialty'];
+                pythonFields['Форма обучения'] = newData['studyForm'];
+                pythonFields['Период обучения'] = newData['period'];
+                pythonFields['Номер и дата выдачи'] = newData['issueNoDate'];
+                pythonFields['Подпись и печать'] = newData['hasSignAndStamp'] === 'Есть' ? 'есть' : 'нет';
+            } else if (docType === 'Заявление на академический отпуск') {
+                pythonFields['тип_документа'] = docType;
+                pythonFields['ФИО студента'] = newData['fio'];
+                pythonFields['Группа и курс'] = newData['groupCourse'];
+                pythonFields['Причина отпуска'] = newData['reason'];
+                pythonFields['Дата начала'] = newData['startDate'];
+                pythonFields['Дата окончания'] = newData['endDate'];
+                pythonFields['Дата заявления'] = newData['appDate'];
+                pythonFields['Подпись студента'] = newData['hasStudentSign'] === 'Есть' ? 'есть' : 'нет';
+            } else {
+                pythonFields['тип_документа'] = docType;
+                pythonFields['ФИО студента'] = newData['fio'];
+                pythonFields['Организация'] = newData['organization'];
+                pythonFields['Сроки практики'] = newData['practiceDates'];
+                pythonFields['Руководитель практики'] = newData['supervisor'];
+                pythonFields['Оценка'] = newData['grade'];
+                pythonFields['Номер и дата выдачи'] = newData['issueNoDate'];
+                pythonFields['Подпись и печать'] = newData['hasSignAndStamp'] === 'Есть' ? 'есть' : 'нет';
+            }
+
+            const formData = new FormData();
+            const blankFile = new File([], "edited_query.pdf", { type: "application/pdf" });
+            formData.append("file", blankFile);
+            formData.append("question", `Проверка документа ${docType}`);
+            // Исправлено: упаковываем измененный JSON для безопасного пересчета в backend.py
+            formData.append("edited_fields_json", JSON.stringify(pythonFields));
+
+            try {
+                const response = await fetch("/analyze", {
+                    method: "POST",
+                    body: formData
+                });
+                const result = await response.json();
+                removeMessage(thinkingId);
+                
+                appendDataVerificationCard();
+                if (result.rag_analysis && result.rag_analysis.final_answer) {
+                    appendBotMessage(`<div class="font-semibold text-emerald-800"><i class="fa-solid fa-circle-check mr-1"></i> Новый вердикт: ${result.rag_analysis.final_answer}</div>`);
+                }
+            } catch (error) {
+                removeMessage(thinkingId);
+                appendBotMessage("❌ Ошибка при повторной валидации данных на сервере.");
+            }
         }
 
         function confirmDataCorrect() {
             appendUserMessage("Данные распознаны верно, подтверждаю!");
             
+            const docType = state.activeDocument ? state.activeDocument.docType : "Документ";
+            const thinkingId = appendBotThinking('Регистрация финального статуса документа в базе...');
+
             setTimeout(() => {
+                removeMessage(thinkingId);
                 appendBotMessage(`
-                    <p class="text-slate-800">Отлично! Документ <strong>«${escapeHtml(state.activeDocument.docType)}»</strong> проверен и зарегистрирован в единой базе деканата.</p>
-                    <p class="text-xs text-slate-600 mt-1">Вы можете задать любой вопрос по данному документу или процессам обучения.</p>
+                    <p class="text-slate-800">Отлично! Документ <strong>«${escapeHtml(docType)}»</strong> проверен и успешно зарегистрирован в единой базе деканата.</p>
+                    <p class="text-xs text-slate-600 mt-1">Вы можете задать любой сопутствующий вопрос по данному документу или процессам обучения.</p>
                 `);
             }, 600);
         }
 
-        function sendQuickQuestion(questionText) {
-            document.getElementById('chat-input').value = questionText;
-            handleSendMessage();
-        }
-
-        function handleSendMessage(e) {
-            if (e) e.preventDefault();
+        async function handleSendMessage(e) {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            
             const input = document.getElementById('chat-input');
             const message = input.value.trim();
             if (!message) return;
@@ -574,27 +711,52 @@
             appendUserMessage(message);
             input.value = '';
 
-            const thinkingId = appendBotThinking('ИИ-помощник генерирует ответ...');
+            const thinkingId = appendBotThinking('Локальная LLM анализирует вопрос и Положение вуза...');
 
-            setTimeout(() => {
-                removeMessage(thinkingId);
-                const botReply = generateAIResponse(message);
-                appendBotMessage(botReply);
-            }, 800);
+            if (state.activeDocument) {
+                const formData = new FormData();
+                const blankFile = new File([""], "empty_query.pdf", { type: "application/pdf" });
+                formData.append("file", blankFile);
+                formData.append("question", message);
+
+                try {
+                    // Исправлен адрес на корректный порт вашего FastAPI бэкенда
+                    const response = await fetch("/analyze", {
+                        method: "POST",
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    removeMessage(thinkingId);
+
+                    if (result.rag_analysis && result.rag_analysis.final_answer) {
+                        appendBotMessage(result.rag_analysis.final_answer);
+                    }
+                    state.activeDocument = null;
+                    updateActiveDocBadge();
+                } catch (error) {
+                    removeMessage(thinkingId);
+                    appendBotMessage("❌ Ошибка при обработке запроса локальной языковой моделью.");
+                }
+            } else {
+                setTimeout(() => {
+                    removeMessage(thinkingId);
+                    appendBotMessage(`Я принял ваш вопрос: "${message}". Чтобы проверить документ на соответствие регламентам деканата, пожалуйста, прикрепите файл (скан справки или заявления) через меню скрепки.`);
+                }, 800);
+            }
         }
+        // --- ИСПРАВЛЕННЫЙ ФРАГМЕНТ 3.2: ФУНКЦИИ ОТРИСОВКИ UI ЧАТА И ЗАКРЫВАЮЩИЕ ТЕГИ ---
 
         function appendUserMessage(text) {
             const chatContainer = document.getElementById('chat-messages');
             const messageEl = document.createElement('div');
-            messageEl.className = "flex items-start justify-end space-x-3 animate-chat-msg";
+            messageEl.className = "flex items-start justify-end space-x-3 anonymity-user-msg animate-chat-msg";
             
             messageEl.innerHTML = `
                 <div class="bg-brand-600 text-white rounded-2xl rounded-tr-none p-3.5 shadow-sm text-sm max-w-xl">
                     <p>${escapeHtml(text)}</p>
                 </div>
-                <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center shrink-0 text-xs font-bold shadow-sm">
-                    С
-                </div>
+                <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center shrink-0 text-xs font-bold shadow-sm">С</div>
             `;
             chatContainer.appendChild(messageEl);
             scrollToBottom();
@@ -615,9 +777,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center shrink-0 text-xs font-bold shadow-sm">
-                    С
-                </div>
+                <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center shrink-0 text-xs font-bold shadow-sm">С</div>
             `;
             chatContainer.appendChild(messageEl);
             scrollToBottom();
@@ -642,7 +802,6 @@
             scrollToBottom();
             return id;
         }
-
         function appendBotMessage(htmlContent) {
             const chatContainer = document.getElementById('chat-messages');
             const messageEl = document.createElement('div');
@@ -678,50 +837,6 @@
 
         function resetChat() {
             location.reload();
-        }
-
-        function generateAIResponse(userText) {
-            const query = userText.toLowerCase();
-            const doc = state.activeDocument;
-            const fio = doc ? doc.data.fio || 'Студента' : 'Студента';
-
-            if (query.includes('справк') && (query.includes('обучен') || query.includes('эцп'))) {
-                if (doc && doc.docType === 'Справка об обучении') {
-                    return `
-                        <p>На основе вашей справки (${escapeHtml(fio)}) сформирован электронный дубликат с ЭЦП декана.</p>
-                        <div class="text-xs bg-brand-50/50 p-3 rounded-xl border border-brand-100 space-y-1 my-2">
-                            <p><strong>Направление:</strong> ${escapeHtml(doc.data.specialty)}</p>
-                            <p><strong>Форма:</strong> ${escapeHtml(doc.data.studyForm)}</p>
-                            <p><strong>Выдано:</strong> ${escapeHtml(doc.data.issueNoDate)}</p>
-                        </div>
-                        <button onclick="alert('Файл справки с ЭЦП сохранен!')" class="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-colors inline-flex items-center gap-1.5">
-                            <i class="fa-solid fa-download"></i> Скачать документ (PDF)
-                        </button>
-                    `;
-                }
-                return `<p>Вы можете запросить справку об обучении. Прикрепите существующую справку через <i class="fa-solid fa-paperclip text-brand-600"></i> для мгновенной выгрузки.</p>`;
-            } else if (query.includes('акад') || query.includes('отпуск')) {
-                if (doc && doc.docType === 'Заявление на академический отпуск') {
-                    return `
-                        <p>Заявление на академический отпуск зарегистрировано.</p>
-                        <p class="text-xs text-slate-600 mt-1">Причина: <strong>${escapeHtml(doc.data.reason)}</strong>. Период отпуска: с ${escapeHtml(doc.data.startDate)} по ${escapeHtml(doc.data.endDate)}.</p>
-                    `;
-                }
-                return `<p>Для отправки приказа на академический отпуск прикрепите сканированное заявление с вашей подписью.</p>`;
-            } else if (query.includes('практик')) {
-                if (doc && doc.docType === 'Справка о практике') {
-                    return `
-                        <p>Справка о прохождении практики в организации <strong>${escapeHtml(doc.data.organization)}</strong> подтверждена.</p>
-                        <p class="text-xs text-slate-600 mt-1">Итоговая оценка: <strong>${escapeHtml(doc.data.grade)}</strong>, Руководитель: ${escapeHtml(doc.data.supervisor)}.</p>
-                    `;
-                }
-                return `<p>Справку о практике необходимо сдать с печатью профильной организации и оценкой руководителя.</p>`;
-            } else {
-                return `
-                    <p>Спасибо за ваш запрос!</p>
-                    <p class="text-xs text-slate-600 mt-1">Обращение принято к рассмотрению. Номер обращения: <strong>№REQ-${Math.floor(1000 + Math.random() * 9000)}</strong>.</p>
-                `;
-            }
         }
     </script>
 </body>
